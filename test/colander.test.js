@@ -366,4 +366,68 @@ describe.skip("===Colander===", () => {
     // console.log(await clip.getStatus(1));
     // console.log(await colander.surplus())
   });
+  it("Colander earned test", async () => {
+    // Mint collateral tokens to users
+    await amaticc.connect(deployer).mint(deployer.address, toWad("20000"));
+    await amaticc.connect(deployer).mint(signer1.address, toWad("2000"));
+    await amaticc.connect(deployer).mint(signer2.address, toWad("2000"));
+    await amaticc.connect(deployer).approve(interaction.address, toWad("10000"));
+    await amaticc.connect(signer1).approve(interaction.address, toWad("2000"));
+    await amaticc.connect(signer2).approve(interaction.address, toWad("2000"));
+    // Deposit collateral to Sikka
+    await interaction.connect(deployer).deposit(deployer.address, amaticc.address, toWad("10000"));
+    await interaction.connect(signer1).deposit(signer1.address, amaticc.address, toWad("1000"));
+    await interaction.connect(signer2).deposit(signer2.address, amaticc.address, toWad("1000"));
+
+    // Borrowing Sikka
+    await interaction.connect(deployer).borrow(amaticc.address, toWad("6000"));
+    await interaction.connect(signer1).borrow(amaticc.address, toWad("300"));
+    await interaction.connect(signer2).borrow(amaticc.address, toWad("300"));
+
+    const deployerBalances = await sikka.balanceOf(deployer.address);
+    const signer1Balances = await sikka.balanceOf(signer1.address);
+    const signer2Balances = await sikka.balanceOf(signer2.address);
+    expect(deployerBalances).to.be.equal(toWad("6000"));
+    expect(signer1Balances).to.be.equal(toWad("300"));
+    expect(signer2Balances).to.be.equal(toWad("300"));
+
+    // 1. User A deposits N sikka stablecoin tokens
+    await sikka.connect(deployer).approve(colanderRewards.address, toWad("6000"));
+    await sikka.connect(signer1).approve(colander.address, toWad("300"));
+    await sikka.connect(signer2).approve(colander.address, toWad("300"));
+
+    await colander.connect(signer1).join(toWad("300"));
+    const signer1amountInColander = await colander.balanceOf(signer1.address);
+    expect(signer1amountInColander).to.be.equal(toWad("300"));
+    
+    // 2. Replenish amount X (with amount already in contract)
+    await colanderRewards.connect(deployer).replenish(toWad("3000"));
+
+    // 3. End Time is exceeded
+    await network.provider.send("evm_increaseTime", [3600]);
+    await network.provider.send("evm_mine");
+    
+    // 4. User A receives X in rewards, withdraws their funds
+    const signer1earned = await colanderRewards.earned(signer1.address);
+    const signer1redeemable = await colanderRewards.redeemable(signer1.address);
+    await colander.connect(signer1).exit(toWad("300"));
+    const signer1amountInColanderAfterExit = await colander.balanceOf(signer1.address);
+    expect(signer1amountInColanderAfterExit).to.be.equal(toWad("0"));
+    
+    // 5. User B deposits N
+    await colander.connect(signer2).join(toWad("300"));
+    const signer2amountInColander = await colander.balanceOf(signer2.address);
+    expect(signer2amountInColander).to.be.equal(toWad("300"));
+    // 6. Replenish amount Y
+    await colanderRewards.connect(deployer).replenish(toWad("3000"));
+    // 7. End Time is exceeded
+    await network.provider.send("evm_increaseTime", [3600]);
+    await network.provider.send("evm_mine");
+    // 8. User B receives Y in rewards, withdraws their funds. Since deposit amount is the same, yield should be the same.
+    expect(await colanderRewards.earned(signer2.address)).to.be.equal(signer1earned);
+    expect(await colanderRewards.redeemable(signer2.address)).to.be.equal(signer1redeemable);
+    await colander.connect(signer2).exit(toWad("300"));
+    const signer2amountInColanderAfterExit = await colander.balanceOf(signer2.address);
+    expect(signer2amountInColanderAfterExit).to.be.equal(toWad("0"));
+  });
 });
