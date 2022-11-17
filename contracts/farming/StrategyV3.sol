@@ -31,7 +31,7 @@ contract StrategyV3 is
 
   mapping(uint256 => uint256) private _sharesById;
 
-  modifier onlyHelioFarming() {
+  modifier onlyFarming() {
     require(msg.sender == farming, "!helio Farming");
     _;
   }
@@ -53,7 +53,7 @@ contract StrategyV3 is
   function deposit(address, uint256 _tokenId)
     public
     virtual
-    onlyHelioFarming
+    onlyFarming
     whenNotPaused
     returns (uint256)
   {
@@ -76,7 +76,7 @@ contract StrategyV3 is
   function withdraw(address, uint256 _tokenId)
     public
     virtual
-    onlyHelioFarming
+    onlyFarming
     nonReentrant
     returns (uint256)
   {
